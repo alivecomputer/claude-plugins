@@ -429,7 +429,19 @@ elif [ "${ALIVE_MIGRATION_CONFLICT:-}" = "both_exist" ]; then
 WARNING: Both .walnut/ and .alive/ exist in this world. This needs manual resolution -- invoke the migration skill to handle it."
 fi
 
-# Detect v2 patterns that need v3 upgrade
+# Detect v2 patterns that need v3 upgrade.
+#
+# Detection prunes 01_Archive/ and migration backups (.alive-migrate-backup,
+# *-backup) -- archived or backed-up v2 remnants are expected on an upgraded
+# world and must not flag it as legacy. 03_Inputs/ counts only when the v3
+# 03_Inbox/ is absent; both existing means an incomplete rename, which the
+# upgrade skill handles, not a v2 world.
+#
+# The notice itself is one factual line. The previous release injected a
+# long first-person "MESSAGE FROM THE DEVELOPER" here every session; models
+# read unexpected persuasive text inside hook output as a prompt-injection
+# attempt and flag it to the human instead of acting on it. Keep it short,
+# neutral, and pointed at the command.
 UPGRADE_NEEDED=""
 if [ -n "$WORLD_ROOT" ]; then
   # A directory named bundles/ is common in unrelated projects. Treat it as
@@ -441,40 +453,32 @@ if [ -n "$WORLD_ROOT" ]; then
       LEGACY_BUNDLES_FOUND="1"
       break
     fi
-  done < <(find "$WORLD_ROOT" -maxdepth 5 -type f \
-    \( -path "*/_kernel/key.md" -o -path "*/_core/key.md" \) \
+  done < <(find "$WORLD_ROOT" -maxdepth 5 \
+    \( -name "01_Archive" -o -name ".alive-migrate-backup" -o -name "*-backup" \) -prune -o \
+    -type f \( -path "*/_kernel/key.md" -o -path "*/_core/key.md" \) \
     -print 2>/dev/null)
 
-  # Check for v2 indicators
-  if find "$WORLD_ROOT" -maxdepth 4 -name "tasks.md" -path "*/_kernel/tasks.md" -print -quit 2>/dev/null | grep -q . || \
-     find "$WORLD_ROOT" -maxdepth 4 -type d -name "_generated" -path "*/_kernel/_generated" -print -quit 2>/dev/null | grep -q . || \
-     [ -n "$LEGACY_BUNDLES_FOUND" ] || \
-     [ -d "$WORLD_ROOT/People" ] 2>/dev/null || \
-     [ -d "$WORLD_ROOT/03_Inputs" ] 2>/dev/null; then
+  # Collect v2 indicators (archive/backup paths pruned)
+  V2_MARKERS=""
+  if find "$WORLD_ROOT" -maxdepth 4 \
+    \( -name "01_Archive" -o -name ".alive-migrate-backup" -o -name "*-backup" \) -prune -o \
+    -name "tasks.md" -path "*/_kernel/tasks.md" -print 2>/dev/null | grep -q .; then
+    V2_MARKERS="${V2_MARKERS} _kernel/tasks.md"
+  fi
+  if find "$WORLD_ROOT" -maxdepth 4 \
+    \( -name "01_Archive" -o -name ".alive-migrate-backup" -o -name "*-backup" \) -prune -o \
+    -type d -name "_generated" -path "*/_kernel/_generated" -print 2>/dev/null | grep -q .; then
+    V2_MARKERS="${V2_MARKERS} _kernel/_generated/"
+  fi
+  [ -n "$LEGACY_BUNDLES_FOUND" ] && V2_MARKERS="${V2_MARKERS} bundles/"
+  [ -d "$WORLD_ROOT/People" ] 2>/dev/null && V2_MARKERS="${V2_MARKERS} People/"
+  if [ -d "$WORLD_ROOT/03_Inputs" ] && [ ! -d "$WORLD_ROOT/03_Inbox" ]; then
+    V2_MARKERS="${V2_MARKERS} 03_Inputs/"
+  fi
+
+  if [ -n "$V2_MARKERS" ]; then
     UPGRADE_NEEDED="
---- MESSAGE FROM THE DEVELOPER ---
-
-Hey — you're running ALIVE v3 on a v2 world. We shipped a major architectural update based on feedback from the first 500 users. Here's what changed and why:
-
-WHAT'S NEW IN v3:
-- Script-operated tasks (tasks.py CLI replaces tasks.md — faster, no context burn)
-- True projections (now.json computed from ALL sources post-save — concurrent sessions don't clobber each other)
-- Flat kernel (_generated/ subfolder removed — 6 files flat in _kernel/)
-- Flat bundles (bundles/ container removed — bundles sit next to _kernel/ in walnut root)
-- 03_Inputs renamed to 03_Inbox (universally understood)
-- 3-file load sequence (key.md + now.json + insights.md — down from 13+ file reads)
-- Observations.md removed (stash routes to log at save)
-
-WHY: Loading a walnut was reading 13+ files. Task tracking was broken across 129 zombie files. Concurrent sessions clobbered each other's context. This release fixes all of it.
-
-YOUR WORLD NEEDS MIGRATION. Run:
-
-  /alive:system-upgrade
-
-It will show you exactly what changes, back everything up, and migrate your world. Takes a few minutes. Nothing breaks if you don't — but you'll be running v3 rules on v2 structure, which means degraded performance and missing features.
-
-— Ben (@benslockedin)
----"
+Legacy world structure detected (v2 markers:${V2_MARKERS}). This plugin reads the v3 layout. To migrate, run /alive:system-upgrade (preview first with --dry-run)."
   fi
 fi
 
