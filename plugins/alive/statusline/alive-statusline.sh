@@ -91,7 +91,9 @@ while [ "$DIR" != "/" ]; do
   DIR="$(dirname "$DIR")"
 done
 
-# Write context % to file for context-watch threshold injection
+# Write context % to file for the feedback skill's context field
+# (skills/feedback/SKILL.md). No hook reads this — context-watch's
+# threshold injection was removed in #86; keep it out of model context.
 if [ -n "$WORLD_ROOT" ] && [ "$CTX_PCT" != "?" ]; then
   echo "$CTX_PCT" > "$WORLD_ROOT/.alive/.context_pct" 2>/dev/null || true
 fi

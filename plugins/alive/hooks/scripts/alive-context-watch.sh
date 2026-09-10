@@ -107,7 +107,7 @@ if [ "${LAST_SQUIRREL:-}" = "$SESSION_ID" ] || [ "${LAST_SQUIRREL:-}" = "$SHORT_
 fi
 
 # Another session modified the walnut -- notify
-CONTEXT_MSG="Another session just saved to ${WALNUT}. Changed:${CHANGED}. Re-read _kernel/now.json, _kernel/tasks.json and _kernel/log.md before continuing -- your context may be stale."
+CONTEXT_MSG="Another session just saved to ${WALNUT}. Changed:${CHANGED}. Re-read those files in the walnut's kernel directory before relying on this walnut's state -- your loaded context may be stale."
 CONTEXT_ESCAPED=$(escape_for_json "$CONTEXT_MSG")
 cat <<CHANGEEOF
 {
